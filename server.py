@@ -2,9 +2,13 @@ import asyncio
 import json
 from typing import Any
 
+from fastapi import FastAPI
 
-async def _run_mcp_tool(tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
-    arguments = arguments or {}
+app = FastAPI()
+
+
+async def _run_mcp_method(method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    params = params or {}
 
     process = await asyncio.create_subprocess_exec(
         "google-ads-mcp",
@@ -27,19 +31,16 @@ async def _run_mcp_tool(tool_name: str, arguments: dict[str, Any] | None = None)
         },
     }
 
-    tool_call_request = {
+    request = {
         "jsonrpc": "2.0",
         "id": 2,
-        "method": "tools/call",
-        "params": {
-            "name": tool_name,
-            "arguments": arguments,
-        },
+        "method": method,
+        "params": params,
     }
 
     payload = (
         json.dumps(initialize_request) + "\n" +
-        json.dumps(tool_call_request) + "\n"
+        json.dumps(request) + "\n"
     ).encode("utf-8")
 
     stdout, stderr = await process.communicate(payload)
@@ -51,7 +52,8 @@ async def _run_mcp_tool(tool_name: str, arguments: dict[str, Any] | None = None)
         raise RuntimeError(f"google-ads-mcp failed: {stderr_text or 'unknown error'}")
 
     lines = [line for line in stdout_text.splitlines() if line.strip()]
-    parsed = []
+    parsed: list[dict[str, Any]] = []
+
     for line in lines:
         try:
             parsed.append(json.loads(line))
@@ -61,15 +63,44 @@ async def _run_mcp_tool(tool_name: str, arguments: dict[str, Any] | None = None)
     if not parsed:
         raise RuntimeError(f"No JSON response from MCP. STDOUT: {stdout_text} STDERR: {stderr_text}")
 
-    tool_response = next((item for item in parsed if item.get("id") == 2), None)
-    if not tool_response:
-        raise RuntimeError(f"Tool response not found. Responses: {parsed}")
+    response = next((item for item in parsed if item.get("id") == 2), None)
+    if not response:
+        raise RuntimeError(f"Response not found. Responses: {parsed}")
 
-    if "error" in tool_response:
-        raise RuntimeError(json.dumps(tool_response["error"]))
+    if "error" in response:
+        raise RuntimeError(json.dumps(response["error"]))
 
-    return tool_response.get("result", {})
+    return response.get("result", {})
+
+
+async def _run_mcp_tool(tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+    return await _run_mcp_method(
+        "tools/call",
+        {
+            "name": tool_name,
+            "arguments": arguments or {},
+        },
+    )
+
+
+async def list_tools() -> dict[str, Any]:
+    return await _run_mcp_method("tools/list", {})
 
 
 async def list_accessible_customers() -> dict[str, Any]:
     return await _run_mcp_tool("list_accessible_customers")
+
+
+@app.get("/health")
+async def health():
+    return {"ok": True}
+
+
+@app.get("/tools")
+async def tools():
+    return await list_tools()
+
+
+@app.get("/list-accessible-customers")
+async def http_list_accessible_customers():
+    return await list_accessible_customers()

@@ -91,7 +91,7 @@ async def list_accessible_customers() -> dict[str, Any]:
     return await _run_mcp_tool("list_accessible_customers")
 
 
-async def search_campaigns(customer_id: str) -> dict[str, Any]:
+async def search_campaigns(customer_id: str, login_customer_id: str | None = None) -> dict[str, Any]:
     query = """
     SELECT
       campaign.id,
@@ -102,13 +102,15 @@ async def search_campaigns(customer_id: str) -> dict[str, Any]:
     ORDER BY campaign.name
     """
 
-    return await _run_mcp_tool(
-        "search",
-        {
-            "customer_id": customer_id,
-            "query": query,
-        },
-    )
+    args: dict[str, Any] = {
+        "customer_id": customer_id,
+        "query": query,
+    }
+
+    if login_customer_id:
+        args["login_customer_id"] = login_customer_id
+
+    return await _run_mcp_tool("search", args)
 
 
 @app.get("/health")
@@ -127,10 +129,11 @@ async def http_list_accessible_customers():
 
 
 @app.post("/campaigns")
-async def http_search_campaigns(body: dict):
+async def http_search_campaigns(body: dict[str, Any]):
     customer_id = body.get("customer_id")
+    login_customer_id = body.get("login_customer_id")
 
     if not customer_id:
         return {"error": "customer_id is required"}
 
-    return await search_campaigns(customer_id)
+    return await search_campaigns(customer_id, login_customer_id)

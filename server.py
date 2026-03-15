@@ -101,6 +101,6 @@ async def tools():
     return await list_tools()
 
 
-@app.get("/list-accessible-customers")
+@app.post("/list-accessible-customers")
 async def http_list_accessible_customers():
     return await list_accessible_customers()

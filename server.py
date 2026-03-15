@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from typing import Any
 
 from fastapi import FastAPI
@@ -43,7 +44,17 @@ async def _run_mcp_method(method: str, params: dict[str, Any] | None = None) -> 
         json.dumps(request) + "\n"
     ).encode("utf-8")
 
-    stdout, stderr = await process.communicate(payload)
+    stdout, stderr = await process.communicate()
+
+    stderr_text = stderr.decode("utf-8", errors="ignore").strip()
+    stdout_text = stdout.decode("utf-8", errors="ignore").strip()
+
+    if process.stdin:
+        process.stdin.write(payload)
+        await process.stdin.drain()
+        process.stdin.close()
+
+    stdout, stderr = await process.communicate()
 
     stderr_text = stderr.decode("utf-8", errors="ignore").strip()
     stdout_text = stdout.decode("utf-8", errors="ignore").strip()
@@ -121,6 +132,16 @@ async def health():
 @app.get("/tools")
 async def tools():
     return await list_tools()
+
+
+@app.get("/debug-auth-config")
+async def debug_auth_config():
+    return {
+        "GOOGLE_ADS_DEVELOPER_TOKEN": bool(os.getenv("GOOGLE_ADS_DEVELOPER_TOKEN")),
+        "GOOGLE_ADS_CLIENT_ID": bool(os.getenv("GOOGLE_ADS_CLIENT_ID")),
+        "GOOGLE_ADS_CLIENT_SECRET": bool(os.getenv("GOOGLE_ADS_CLIENT_SECRET")),
+        "GOOGLE_ADS_REFRESH_TOKEN": bool(os.getenv("GOOGLE_ADS_REFRESH_TOKEN")),
+    }
 
 
 @app.post("/list-accessible-customers")

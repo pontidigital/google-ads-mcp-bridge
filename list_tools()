@@ -1,0 +1,2 @@
+async def list_tools() -> dict[str, Any]:
+    return await _run_mcp_method("tools/list", {})

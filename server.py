@@ -91,6 +91,26 @@ async def list_accessible_customers() -> dict[str, Any]:
     return await _run_mcp_tool("list_accessible_customers")
 
 
+async def search_campaigns(customer_id: str) -> dict[str, Any]:
+    query = """
+    SELECT
+      campaign.id,
+      campaign.name,
+      campaign.status,
+      campaign.advertising_channel_type
+    FROM campaign
+    ORDER BY campaign.name
+    """
+
+    return await _run_mcp_tool(
+        "search",
+        {
+            "customer_id": customer_id,
+            "query": query,
+        },
+    )
+
+
 @app.get("/health")
 async def health():
     return {"ok": True}
@@ -104,3 +124,13 @@ async def tools():
 @app.post("/list-accessible-customers")
 async def http_list_accessible_customers():
     return await list_accessible_customers()
+
+
+@app.post("/campaigns")
+async def http_search_campaigns(body: dict):
+    customer_id = body.get("customer_id")
+
+    if not customer_id:
+        return {"error": "customer_id is required"}
+
+    return await search_campaigns(customer_id)
